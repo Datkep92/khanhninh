@@ -307,10 +307,99 @@ window.updateTaskStatus = async function(taskId, status) {
     window.showMessage(`Đã cập nhật trạng thái thành "${window.getStatusText(status)}"`);
 };
 
-// Thêm công việc mới
+// Thêm công việc mới (phân quyền theo vai trò)
 window.showAddTaskModal = function(companyId = null) {
     window.loadCompanies();
     window.loadUsers();
+    
+    const isAdmin = window.currentUserRole === 'admin' || window.currentUserData?.role === 'admin';
+    const currentUserId = window.currentUser?.uid;
+    const currentUserName = window.currentUserData?.name || window.currentUser?.email;
+    
+    // Lấy danh sách công ty
+    let availableCompanies = [];
+    
+    if (isAdmin) {
+        // Admin: tất cả công ty
+        availableCompanies = window.companiesList;
+    } else {
+        // Nhân viên: chỉ công ty mình quản lý
+        availableCompanies = window.companiesList.filter(c => c.assignedTo === currentUserId);
+    }
+    
+    // Kiểm tra quyền nếu có companyId được truyền vào
+    let selectedCompany = null;
+    if (companyId) {
+        selectedCompany = availableCompanies.find(c => c.id === companyId);
+        if (!selectedCompany && !isAdmin) {
+            window.showMessage('🔒 Bạn không có quyền thêm việc cho công ty này!');
+            return;
+        }
+    }
+    
+    // Ngày hạn mặc định là hôm nay + 7 ngày
+    const defaultDueDate = new Date();
+    defaultDueDate.setDate(defaultDueDate.getDate() + 7);
+    const defaultDueDateStr = defaultDueDate.toISOString().split('T')[0];
+    
+    // Xác định người xử lý mặc định (nhân viên quản lý của công ty được chọn)
+    let defaultAssignedTo = '';
+    let defaultAssignedToName = '';
+    
+    if (selectedCompany) {
+        defaultAssignedTo = selectedCompany.assignedTo || '';
+        defaultAssignedToName = selectedCompany.assignedToName || 'Chưa phân công';
+    } else if (availableCompanies.length > 0 && !isAdmin) {
+        defaultAssignedTo = availableCompanies[0].assignedTo || currentUserId;
+        defaultAssignedToName = availableCompanies[0].assignedToName || currentUserName;
+    }
+    
+    let assignedToHtml = '';
+    
+    if (isAdmin) {
+        // Admin: chọn nhân viên nhưng mặc định là nhân viên quản lý của công ty
+        assignedToHtml = `
+            <div class="form-group">
+                <label>Người xử lý</label>
+                <select name="assignedTo" id="assignedToSelect">
+                    ${window.usersList.filter(u => u.role === 'staff').map(u => `
+                        <option value="${u.uid}" ${defaultAssignedTo === u.uid ? 'selected' : ''}>
+                            ${escapeHtml(u.name)}
+                        </option>
+                    `).join('')}
+                </select>
+                <small>Mặc định là nhân viên phụ trách của công ty (có thể thay đổi)</small>
+            </div>
+        `;
+    } else {
+        // Nhân viên: chỉ gán cho chính mình
+        assignedToHtml = `
+            <div class="form-group">
+                <label>Người xử lý</label>
+                <input type="hidden" name="assignedTo" value="${currentUserId}">
+                <div class="info-box" style="padding: 10px; background: #f0f2f5; border-radius: 8px;">
+                    👤 ${escapeHtml(currentUserName)} (bạn sẽ xử lý)
+                </div>
+            </div>
+        `;
+    }
+    
+    // Script để tự động cập nhật người xử lý khi chọn công ty (cho Admin)
+    const autoUpdateScript = isAdmin ? `
+        <script>
+            document.getElementById('companySelect')?.addEventListener('change', function() {
+                const companyId = this.value;
+                const companies = ${JSON.stringify(availableCompanies.map(c => ({ id: c.id, assignedTo: c.assignedTo, assignedToName: c.assignedToName })))};
+                const selectedCompany = companies.find(c => c.id === companyId);
+                if (selectedCompany && selectedCompany.assignedTo) {
+                    const assignedToSelect = document.getElementById('assignedToSelect');
+                    if (assignedToSelect) {
+                        assignedToSelect.value = selectedCompany.assignedTo;
+                    }
+                }
+            });
+        </script>
+    ` : '';
     
     const html = `
         <form id="addTaskForm">
@@ -320,17 +409,18 @@ window.showAddTaskModal = function(companyId = null) {
             </div>
             <div class="form-group">
                 <label>Công ty/HKD</label>
-                <select name="companyId">
-                    ${window.companiesList.map(c => `<option value="${c.id}" ${companyId === c.id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('')}
+                <select name="companyId" id="companySelect" ${!isAdmin && availableCompanies.length === 1 ? 'disabled' : ''}>
+                    ${availableCompanies.map(c => `
+                        <option value="${c.id}" ${companyId === c.id || (!companyId && selectedCompany?.id === c.id) ? 'selected' : ''}>
+                            ${c.type === 'household' ? '🏪' : '🏭'} ${escapeHtml(c.name)}
+                            ${isAdmin && c.assignedToName ? ` (Phụ trách: ${c.assignedToName})` : ''}
+                        </option>
+                    `).join('')}
+                    ${availableCompanies.length === 0 ? '<option value="">Bạn chưa được phân công công ty nào</option>' : ''}
                 </select>
+                ${!isAdmin && availableCompanies.length === 1 ? '<small>Bạn chỉ có thể thêm việc cho công ty mình quản lý</small>' : ''}
             </div>
-            <div class="form-group">
-                <label>Người xử lý</label>
-                <select name="assignedTo">
-                    <option value="">Chưa phân công</option>
-                    ${window.usersList.filter(u => u.role === 'staff').map(u => `<option value="${u.uid}" ${u.uid === window.currentUser?.uid ? 'selected' : ''}>${escapeHtml(u.name)}</option>`).join('')}
-                </select>
-            </div>
+            ${assignedToHtml}
             <div class="form-group">
                 <label>Độ ưu tiên</label>
                 <select name="priority">
@@ -341,7 +431,8 @@ window.showAddTaskModal = function(companyId = null) {
             </div>
             <div class="form-group">
                 <label>Hạn xử lý</label>
-                <input type="date" name="dueDate">
+                <input type="date" name="dueDate" value="${defaultDueDateStr}">
+                <small>Mặc định là 7 ngày kể từ hôm nay</small>
             </div>
             <div class="form-group">
                 <label>Mô tả (optional)</label>
@@ -352,6 +443,7 @@ window.showAddTaskModal = function(companyId = null) {
             </div>
             <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Tạo công việc</button>
         </form>
+        ${autoUpdateScript}
     `;
     
     document.getElementById('taskModalBody').innerHTML = html;
@@ -363,16 +455,30 @@ window.showAddTaskModal = function(companyId = null) {
         window.showLoading();
         
         const formData = new FormData(e.target);
-        const assignedTo = formData.get('assignedTo');
-        const assignedUser = window.usersList.find(u => u.uid === assignedTo);
+        let assignedTo = formData.get('assignedTo');
+        let assignedToName = '';
+        
+        const selectedCompanyId = formData.get('companyId');
+        const selectedCompany = window.companiesList.find(c => c.id === selectedCompanyId);
+        
+        if (isAdmin) {
+            // Admin: lấy từ select
+            const assignedUser = window.usersList.find(u => u.uid === assignedTo);
+            assignedToName = assignedUser?.name || 'Chưa phân công';
+        } else {
+            // Nhân viên: gán chính mình
+            assignedTo = currentUserId;
+            assignedToName = currentUserName;
+        }
+        
         const now = new Date().toISOString();
         
         const newTask = {
             title: formData.get('title'),
-            companyId: formData.get('companyId'),
+            companyId: selectedCompanyId,
             description: formData.get('description') || '',
             assignedTo: assignedTo || null,
-            assignedToName: assignedUser?.name || 'Chưa phân công',
+            assignedToName: assignedToName || selectedCompany?.assignedToName || 'Chưa phân công',
             priority: formData.get('priority'),
             dueDate: formData.get('dueDate'),
             status: 'pending',
@@ -385,7 +491,7 @@ window.showAddTaskModal = function(companyId = null) {
             history: [{
                 action: 'created',
                 title: 'Tạo công việc',
-                description: `Công việc "${formData.get('title')}" được tạo (🔥 Làm ngay)`,
+                description: `Công việc "${formData.get('title')}" được tạo bởi ${window.currentUserData?.name} (🔥 Làm ngay)`,
                 by: window.currentUser.uid,
                 byName: window.currentUserData?.name,
                 at: now,
@@ -401,6 +507,7 @@ window.showAddTaskModal = function(companyId = null) {
         
         await window.loadAllData();
         
+        // Refresh UI
         if (window.currentView === 'companies' && window.selectedCompanyId) {
             if (window.renderCompanyDetail) await window.renderCompanyDetail(window.selectedCompanyId);
             if (window.renderCompanyList) window.renderCompanyList();
@@ -412,6 +519,16 @@ window.showAddTaskModal = function(companyId = null) {
         if (window.updateBadges) await window.updateBadges();
         window.showMessage('Thêm công việc thành công!');
     });
+};
+
+// Thêm công việc "Làm ngay" (giữ để tương thích)
+window.addUrgentTask = function(companyId = null) {
+    window.showAddTaskModal(companyId);
+};
+
+// Thêm công việc "Làm ngay" (giữ để tương thích)
+window.addUrgentTask = function(companyId = null) {
+    window.showAddTaskModal(companyId);
 };
 
 // Hàm thoát HTML

@@ -156,25 +156,107 @@ window.getNotesByTask = function(taskId) {
 
 window.getCompanyStats = function(companyId) {
     const companyTasks = window.getTasksByCompany(companyId);
+    const currentPeriod = `Tháng ${new Date().getMonth() + 1}/${new Date().getFullYear()}`;
+    
+    // Đếm công việc thường
+    let normalTotal = 0;
+    let normalPending = 0;
+    let normalProcessing = 0;
+    let normalDone = 0;
+    let normalOverdue = 0;
+    
+    // Đếm công việc định kỳ
+    let recurringTotal = 0;
+    let recurringProcessed = 0; // Đã hoàn thành hoặc bỏ qua trong kỳ này
+    
+    for (const task of companyTasks) {
+        if (!task.isRecurring) {
+            // Công việc thường
+            normalTotal++;
+            if (task.status === 'pending') normalPending++;
+            else if (task.status === 'processing') normalProcessing++;
+            else if (task.status === 'done') normalDone++;
+            
+            if (task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'done') {
+                normalOverdue++;
+            }
+        } else {
+            // Công việc định kỳ
+            recurringTotal++;
+            const isProcessed = (task.history || []).some(h => 
+                (h.action === 'completed' || h.action === 'skipped') && 
+                h.period === currentPeriod
+            );
+            if (isProcessed) {
+                recurringProcessed++;
+            }
+        }
+    }
+    
+    // Tổng hợp
+    const total = normalTotal + recurringTotal;
+    const pending = normalPending + (recurringTotal - recurringProcessed); // Công việc định kỳ chưa xử lý
+    const processing = normalProcessing;
+    const done = normalDone + recurringProcessed; // Công việc định kỳ đã xử lý
+    const overdue = normalOverdue; // Chỉ công việc thường mới tính quá hạn
+    
     return {
-        total: companyTasks.length,
-        pending: companyTasks.filter(t => t.status === 'pending').length,
-        processing: companyTasks.filter(t => t.status === 'processing').length,
-        done: companyTasks.filter(t => t.status === 'done').length,
-        overdue: companyTasks.filter(t => t.dueDate && new Date(t.dueDate) < new Date() && t.status !== 'done').length
+        total: total,
+        pending: pending,
+        processing: processing,
+        done: done,
+        overdue: overdue
     };
 };
 
+// Trong components.js, cập nhật hàm getUserStats và calculateQuarterlyProgress
+
 window.getUserStats = function(userId) {
     const userTasks = window.getTasksByUser(userId);
+    const currentPeriod = `Tháng ${new Date().getMonth() + 1}/${new Date().getFullYear()}`;
+    
     return {
         total: userTasks.length,
         pending: userTasks.filter(t => t.status === 'pending').length,
         processing: userTasks.filter(t => t.status === 'processing').length,
         done: userTasks.filter(t => t.status === 'done').length,
-        overdue: userTasks.filter(t => t.dueDate && new Date(t.dueDate) < new Date() && t.status !== 'done').length
+        overdue: userTasks.filter(t => t.dueDate && new Date(t.dueDate) < new Date() && t.status !== 'done').length,
+        // Thêm thống kê cho công việc định kỳ đã hoàn thành (bao gồm cả bỏ qua)
+        recurringCompleted: userTasks.filter(t => {
+            if (!t.isRecurring) return false;
+            return (t.history || []).some(h => 
+                (h.action === 'completed' || h.action === 'skipped') && 
+                h.period === currentPeriod
+            );
+        }).length
     };
 };
+
+// Tính % hoàn thành công việc trong quý (tính cả bỏ qua)
+function calculateQuarterlyProgress(companyId) {
+    const companyTasks = window.getTasksByCompany(companyId);
+    const currentQuarter = getCurrentQuarter();
+    const currentYear = new Date().getFullYear();
+    const currentPeriod = `Tháng ${new Date().getMonth() + 1}/${new Date().getFullYear()}`;
+    
+    // Lọc công việc định kỳ
+    const recurringTasks = companyTasks.filter(t => t.isRecurring === true);
+    
+    // Đếm số lượng hoàn thành trong kỳ (bao gồm completed và skipped)
+    const completedInPeriod = recurringTasks.filter(task => {
+        const history = task.history || [];
+        return history.some(h => 
+            (h.action === 'completed' || h.action === 'skipped') && 
+            h.period === currentPeriod
+        );
+    }).length;
+    
+    const total = recurringTasks.length;
+    const done = completedInPeriod;
+    
+    if (total === 0) return 100;
+    return Math.round((done / total) * 100);
+}
 
 // Cập nhật badge
 window.updateBadges = async function() {
@@ -193,26 +275,7 @@ window.updateBadges = async function() {
     if (notificationBadge) notificationBadge.textContent = window.tasksList.filter(t => t.dueDate && new Date(t.dueDate) < new Date() && t.status !== 'done').length || '0';
 };
 
-// Khởi tạo dữ liệu mẫu nếu chưa có
-window.initDemoData = async function() {
-    const companiesRef = window.firebaseRef(window.firebaseDb, 'companies');
-    const snapshot = await window.firebaseGet(companiesRef);
-    
-    if (!snapshot.exists()) {
-        // Tạo công ty mẫu
-        const demoCompanies = [
-            { name: "Cửa hàng An Phát", type: "household", address: "12 Nguyễn Huệ, Quận 1, TP.HCM", phone: "0903 123 456", taxCode: "0123456789", assignedTo: null, assignedToName: "Chưa phân công", createdAt: new Date().toISOString() },
-            { name: "Cty TNHH Minh Đức", type: "company", address: "45 Lê Lợi, Quận 1, TP.HCM", phone: "028 1234 567", taxCode: "9876543210", assignedTo: null, assignedToName: "Chưa phân công", createdAt: new Date().toISOString() },
-            { name: "Quán cà phê Sáng", type: "household", address: "78 Trần Phú, Quận 5, TP.HCM", phone: "0912 345 678", taxCode: "5566778899", assignedTo: null, assignedToName: "Chưa phân công", createdAt: new Date().toISOString() },
-            { name: "Cty CP Xây dựng", type: "company", address: "234 Nguyễn Trãi, Quận 1, TP.HCM", phone: "028 9876 543", taxCode: "1122334455", assignedTo: null, assignedToName: "Chưa phân công", createdAt: new Date().toISOString() }
-        ];
-        
-        for (const company of demoCompanies) {
-            await window.firebasePush(companiesRef, company);
-        }
-        console.log('Demo companies created!');
-    }
-};
+
 
 // Close modal handlers
 document.addEventListener('DOMContentLoaded', () => {

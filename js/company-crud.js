@@ -88,26 +88,29 @@ window.showAddCompanyModal = function() {
                 taxCode: formData.get('taxCode') || '',
                 assignedTo: assignedTo || null,
                 assignedToName: assignedToName || 'Chưa phân công',
-                createdAt: new Date().toISOString()
+                createdAt: new Date().toISOString(),
+                history: [{
+                    action: 'created',
+                    title: 'Tạo công ty',
+                    description: `Công ty "${formData.get('name')}" được tạo bởi ${window.currentUserData?.name}`,
+                    by: window.currentUser.uid,
+                    byName: window.currentUserData?.name,
+                    at: new Date().toISOString()
+                }]
             };
             
-            // 1. Thêm công ty vào Firebase
             const companiesRef = window.firebaseRef(window.firebaseDb, 'companies');
             const newCompanyRef = await window.firebasePush(companiesRef, newCompany);
             const newCompanyId = newCompanyRef.key;
             
-            // 2. Cập nhật danh sách công ty ngay lập tức
             await window.loadCompanies();
             
-            // 3. Tạo công việc định kỳ cho công ty mới (đợi 500ms để Firebase sync)
             setTimeout(async () => {
-                // Tìm công ty vừa thêm
                 const addedCompany = window.companiesList.find(c => c.id === newCompanyId);
                 if (addedCompany && window.generateTasksForCompany) {
                     await window.generateTasksForCompany(newCompanyId);
                 }
                 
-                // 4. Cập nhật lại UI
                 await window.loadAllData();
                 window.renderCompanyList();
                 
@@ -118,28 +121,46 @@ window.showAddCompanyModal = function() {
                 window.hideLoading();
                 closeModal('entityModal');
                 window.selectCompany(newCompanyId);
-                window.showMessage('✅ Thêm công ty thành công! Công việc định kỳ đã được tạo.');
+                window.showMessage('✅ Thêm công ty thành công!');
             }, 500);
         });
     });
 };
 
-// Sửa công ty
+// ========== SỬA CÔNG TY (Admin + Nhân viên phụ trách) ==========
 window.showEditCompanyModal = function(companyId) {
-    const isAdmin = window.currentUserRole === 'admin' || window.currentUserData?.role === 'admin';
-    if (!isAdmin) {
-        window.showMessage('🔒 Chỉ Admin mới được sửa!');
-        return;
-    }
-    
     const company = window.companiesList.find(c => c.id === companyId);
     if (!company) return;
+    
+    const isAdmin = window.currentUserRole === 'admin' || window.currentUserData?.role === 'admin';
+    const isAssignedStaff = company.assignedTo === window.currentUser?.uid;
+    
+    if (!isAdmin && !isAssignedStaff) {
+        window.showMessage('🔒 Bạn không có quyền sửa công ty này!');
+        return;
+    }
     
     window.loadUsers().then(() => {
         const staffOptions = window.usersList
             .filter(u => u.role === 'staff')
             .map(u => `<option value="${u.uid}" ${company.assignedTo === u.uid ? 'selected' : ''}>${u.name}</option>`)
             .join('');
+        
+        // Hiển thị lịch sử chuyển giao nếu có
+        const historyHtml = company.history && company.history.length > 0 ? `
+            <div style="margin-top: 15px; padding: 10px; background: #f8f9fa; border-radius: 8px; font-size: 12px;">
+                <strong><i class="fas fa-history"></i> Lịch sử thay đổi:</strong>
+                <div style="margin-top: 5px;">
+                    ${company.history.slice(-5).map(h => `
+                        <div style="padding: 4px 0; border-bottom: 1px solid #eee;">
+                            ${h.action === 'updated' ? '✏️' : h.action === 'transferred' ? '🔄' : '✨'} 
+                            ${h.title || h.action}: ${h.description}
+                            <span style="color: #999; font-size: 10px; float: right;">${new Date(h.at).toLocaleString()}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        ` : '';
         
         const html = `
             <form id="editCompanyForm">
@@ -172,7 +193,9 @@ window.showEditCompanyModal = function(companyId) {
                         <option value="">-- Chưa phân công --</option>
                         ${staffOptions}
                     </select>
+                    <small style="color: #666;">Thay đổi nhân viên phụ trách sẽ được lưu vào lịch sử</small>
                 </div>
+                ${historyHtml}
                 <div style="display: flex; gap: 10px; margin-top: 20px;">
                     <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Cập nhật</button>
                     <button type="button" class="btn btn-secondary" onclick="closeModal('entityModal')">Hủy</button>
@@ -189,32 +212,100 @@ window.showEditCompanyModal = function(companyId) {
             window.showLoading();
             
             const formData = new FormData(e.target);
-            const assignedTo = formData.get('assignedTo');
-            const assignedUser = window.usersList.find(u => u.uid === assignedTo);
+            const newAssignedTo = formData.get('assignedTo');
+            const newAssignedUser = window.usersList.find(u => u.uid === newAssignedTo);
             
-            await window.firebaseUpdate(window.firebaseRef(window.firebaseDb, `companies/${companyId}`), {
+            const updates = {
                 name: formData.get('name'),
                 type: formData.get('type'),
                 address: formData.get('address') || '',
                 phone: formData.get('phone') || '',
                 taxCode: formData.get('taxCode') || '',
-                assignedTo: assignedTo || null,
-                assignedToName: assignedUser?.name || 'Chưa phân công',
+                updatedBy: window.currentUser.uid,
+                updatedByName: window.currentUserData?.name,
                 updatedAt: new Date().toISOString()
-            });
+            };
+            
+            // Kiểm tra xem có thay đổi nhân viên phụ trách không
+            const isTransferring = newAssignedTo !== company.assignedTo;
+            
+            if (newAssignedTo) {
+                updates.assignedTo = newAssignedTo;
+                updates.assignedToName = newAssignedUser?.name || 'Chưa phân công';
+            } else {
+                updates.assignedTo = null;
+                updates.assignedToName = 'Chưa phân công';
+            }
+            
+            // Lưu lịch sử
+            const history = company.history || [];
+            
+            if (isTransferring && newAssignedTo) {
+                // Chuyển giao quyền quản lý
+                const oldStaffName = company.assignedToName || 'Chưa phân công';
+                const newStaffName = newAssignedUser?.name || 'Chưa phân công';
+                history.push({
+                    action: 'transferred',
+                    title: 'Chuyển giao quyền quản lý',
+                    description: `${window.currentUserData?.name} đã chuyển quyền quản lý từ "${oldStaffName}" sang "${newStaffName}"`,
+                    by: window.currentUser.uid,
+                    byName: window.currentUserData?.name,
+                    from: company.assignedTo,
+                    fromName: oldStaffName,
+                    to: newAssignedTo,
+                    toName: newStaffName,
+                    at: new Date().toISOString()
+                });
+            } else {
+                // Cập nhật thông tin thường
+                let changedFields = [];
+                if (updates.name !== company.name) changedFields.push('tên');
+                if (updates.address !== company.address) changedFields.push('địa chỉ');
+                if (updates.phone !== company.phone) changedFields.push('số điện thoại');
+                if (updates.taxCode !== company.taxCode) changedFields.push('mã số thuế');
+                
+                if (changedFields.length > 0) {
+                    history.push({
+                        action: 'updated',
+                        title: 'Cập nhật thông tin',
+                        description: `${window.currentUserData?.name} đã cập nhật: ${changedFields.join(', ')}`,
+                        by: window.currentUser.uid,
+                        byName: window.currentUserData?.name,
+                        changes: changedFields,
+                        at: new Date().toISOString()
+                    });
+                }
+            }
+            
+            updates.history = history;
+            
+            const companyRef = window.firebaseRef(window.firebaseDb, `companies/${companyId}`);
+            await window.firebaseUpdate(companyRef, updates);
             
             window.hideLoading();
             closeModal('entityModal');
             await window.loadCompanies();
             window.renderCompanyList();
             await window.renderCompanyDetail(companyId);
-            window.showMessage('✅ Cập nhật thành công!');
+            
+            if (isTransferring) {
+                window.showMessage(`✅ Đã chuyển quyền quản lý cho ${newAssignedUser?.name || 'người khác'}!`);
+            } else {
+                window.showMessage('✅ Cập nhật thành công!');
+            }
         });
     });
 };
 
-// Xóa công ty
+// ========== XÓA CÔNG TY (Chỉ Admin) ==========
 window.deleteCompany = async function(companyId) {
+    const isAdmin = window.currentUserRole === 'admin' || window.currentUserData?.role === 'admin';
+    
+    if (!isAdmin) {
+        window.showMessage('🔒 Chỉ Admin mới có quyền xóa công ty!');
+        return;
+    }
+    
     const company = window.companiesList.find(c => c.id === companyId);
     if (!company) return;
     
@@ -227,10 +318,8 @@ window.deleteCompany = async function(companyId) {
     
     window.showLoading();
     
-    // Xóa công ty
     await window.firebaseRemove(window.firebaseRef(window.firebaseDb, `companies/${companyId}`));
     
-    // Xóa các công việc liên quan
     const tasksToDelete = window.tasksList.filter(t => t.companyId === companyId);
     for (const task of tasksToDelete) {
         await window.firebaseRemove(window.firebaseRef(window.firebaseDb, `tasks/${task.id}`));
@@ -257,4 +346,4 @@ window.deleteCompany = async function(companyId) {
     window.showMessage(`✅ Đã xóa công ty "${company.name}"!`);
 };
 
-console.log('Company CRUD module loaded!');
+console.log('Company CRUD module loaded - Staff can edit and transfer!');

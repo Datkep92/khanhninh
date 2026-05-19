@@ -7,14 +7,12 @@ window.renderProgressView = async function() {
     const isAdmin = window.currentUserRole === 'admin' || window.currentUserData?.role === 'admin';
     const currentUserId = window.currentUser?.uid;
     
-    // Nếu là admin, chuyển hướng về dashboard
     if (isAdmin) {
         window.showMessage('🔒 Quản lý vui lòng sử dụng Dashboard để theo dõi tiến độ!');
         if (window.switchView) window.switchView('dashboard');
         return;
     }
     
-    // Lấy danh sách công ty mà nhân viên này quản lý
     const myCompanies = window.companiesList.filter(c => c.assignedTo === currentUserId);
     
     if (myCompanies.length === 0) {
@@ -30,33 +28,29 @@ window.renderProgressView = async function() {
         return;
     }
     
-    // Tính % tiến độ cho từng công ty
     const currentPeriod = `Tháng ${new Date().getMonth() + 1}/${new Date().getFullYear()}`;
     
     const companyProgress = myCompanies.map(company => {
         const tasks = window.getTasksByCompany(company.id);
         
-        // Phân loại công việc
         const normalTasks = tasks.filter(t => !t.isRecurring);
         const recurringTasks = tasks.filter(t => t.isRecurring === true);
         
-        // Tính % hoàn thành công việc thường
         let normalTotal = normalTasks.length;
         let normalDone = normalTasks.filter(t => t.status === 'done').length;
         let normalPercent = normalTotal > 0 ? Math.round((normalDone / normalTotal) * 100) : 100;
         
-        // Tính % hoàn thành công việc định kỳ trong tháng/quý hiện tại
+        // ===== SỬA LỖI: TÍNH CẢ SKIPPED =====
         let recurringTotal = recurringTasks.length;
         let recurringDone = 0;
         for (const task of recurringTasks) {
-            const completedThisPeriod = (task.history || []).some(h => 
-                h.action === 'completed' && h.period === currentPeriod
+            const isProcessedThisPeriod = (task.history || []).some(h => 
+                (h.action === 'completed' || h.action === 'skipped') && h.period === currentPeriod
             );
-            if (completedThisPeriod) recurringDone++;
+            if (isProcessedThisPeriod) recurringDone++;
         }
         let recurringPercent = recurringTotal > 0 ? Math.round((recurringDone / recurringTotal) * 100) : 100;
         
-        // Tính tổng thể
         const totalTasks = normalTotal + recurringTotal;
         const doneTasks = normalDone + recurringDone;
         const overallPercent = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 100;
@@ -64,7 +58,6 @@ window.renderProgressView = async function() {
         const badgeClass = company.type === 'household' ? 'badge-hkd' : 'badge-company';
         const badgeText = company.type === 'household' ? 'HKD' : 'CTY';
         
-        // Lấy các công việc chưa hoàn thành để hiển thị cảnh báo
         const pendingTasks = tasks.filter(t => t.status !== 'done');
         const urgentTasks = pendingTasks.filter(t => t.isUrgent === true);
         
@@ -89,10 +82,8 @@ window.renderProgressView = async function() {
         };
     });
     
-    // Sắp xếp theo % hoàn thành giảm dần
     companyProgress.sort((a, b) => b.overallPercent - a.overallPercent);
     
-    // Thống kê tổng thể của nhân viên
     const totalCompanies = companyProgress.length;
     const totalTasksAll = companyProgress.reduce((sum, c) => sum + c.totalTasks, 0);
     const totalDoneAll = companyProgress.reduce((sum, c) => sum + c.doneTasks, 0);
@@ -121,7 +112,6 @@ window.renderProgressView = async function() {
             statusText = 'Chậm tiến độ';
         }
         
-        // Thêm cảnh báo nếu có việc khẩn
         let urgentWarning = '';
         if (cp.urgentCount > 0) {
             urgentWarning = `<span class="urgent-warning-tag">🔥 ${cp.urgentCount} việc KHẨN</span>`;
@@ -217,7 +207,6 @@ window.showCompanyTasksPopup = async function(companyId) {
     const recurringTasks = tasks.filter(t => t.isRecurring === true);
     const currentPeriod = `Tháng ${new Date().getMonth() + 1}/${new Date().getFullYear()}`;
     
-    // Sắp xếp công việc thường: làm ngay -> quá hạn -> sắp hạn
     const sortedNormal = [...normalTasks].sort((a, b) => {
         if (a.status === 'done' && b.status !== 'done') return 1;
         if (a.status !== 'done' && b.status === 'done') return -1;
@@ -230,7 +219,6 @@ window.showCompanyTasksPopup = async function(companyId) {
         return (new Date(a.dueDate) || 0) - (new Date(b.dueDate) || 0);
     });
     
-    // Render công việc thường
     const normalTasksHtml = sortedNormal.map(task => {
         const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'done';
         const daysLeft = task.dueDate ? Math.ceil((new Date(task.dueDate) - new Date()) / (1000 * 60 * 60 * 24)) : null;
@@ -267,27 +255,29 @@ window.showCompanyTasksPopup = async function(companyId) {
         `;
     }).join('');
     
-    // Render công việc định kỳ
+    // ===== SỬA LỖI: TÍNH CẢ SKIPPED TRONG POPUP =====
     const recurringTasksHtml = recurringTasks.map(task => {
-        const completedThisPeriod = (task.history || []).some(h => h.action === 'completed' && h.period === currentPeriod);
+        const isProcessedThisPeriod = (task.history || []).some(h => 
+            (h.action === 'completed' || h.action === 'skipped') && h.period === currentPeriod
+        );
         const frequencyText = task.frequency === 'monthly' ? 'Tháng' : task.frequency === 'quarterly' ? 'Quý' : 'Năm';
         const isRequired = task.required === true;
         
         return `
-            <div class="task-card recurring ${completedThisPeriod ? 'completed' : ''}">
+            <div class="task-card recurring ${isProcessedThisPeriod ? 'completed' : ''}">
                 <div class="task-row">
                     <div class="task-info">
                         <span class="task-title">${task.title}</span>
                         <span class="task-badge">🔄 ${frequencyText}</span>
                         ${isRequired ? '<span class="required-badge">📌 Bắt buộc</span>' : ''}
                     </div>
-                    ${completedThisPeriod ? '<span class="task-status status-done">✅ Đã xong</span>' : '<span class="task-status status-pending">⏳ Chờ</span>'}
+                    ${isProcessedThisPeriod ? '<span class="task-status status-done">✅ Đã xong</span>' : '<span class="task-status status-pending">⏳ Chờ</span>'}
                 </div>
                 <div class="task-meta">
                     <span>📅 Hạn: ${window.formatDate(task.dueDate)}</span>
                 </div>
                 <div class="task-actions">
-                    ${!completedThisPeriod ? `
+                    ${!isProcessedThisPeriod ? `
                         <button class="btn-sm btn-done" onclick="window.completeRecurringTaskFromPopup('${task.id}')">✅ Xác nhận hoàn thành</button>
                     ` : ''}
                     <button class="btn-sm" onclick="window.viewTaskDetail('${task.id}'); window.closeTaskListModal();">📝 Chi tiết</button>
@@ -330,7 +320,6 @@ window.showCompanyTasksPopup = async function(companyId) {
     document.getElementById('taskModal').classList.remove('hidden');
 };
 
-// Chuyển tab trong popup
 window.switchPopupTab = function(tab) {
     const btns = document.querySelectorAll('.popup-tab');
     const normalDiv = document.getElementById('popupNormalTasks');
@@ -349,7 +338,6 @@ window.switchPopupTab = function(tab) {
     }
 };
 
-// Các hàm xử lý từ popup
 window.startTaskFromPopup = async function(taskId) {
     await window.updateTaskStatus(taskId, 'processing');
     window.closeTaskListModal();
