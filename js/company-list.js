@@ -11,6 +11,25 @@ function getDaysLeft(dueDate) {
     return Math.ceil((due - today) / (1000 * 60 * 60 * 24));
 }
 
+// Hàm xác định mức độ ưu tiên của công ty (để sắp xếp)
+function getCompanyPriority(company) {
+    const stats = window.getCompanyStats(company.id);
+    const tasks = window.getTasksByCompany(company.id);
+    
+    // Kiểm tra việc khẩn cấp (LÀM NGAY)
+    const hasUrgent = tasks.some(t => t.isUrgent === true && t.status !== 'done');
+    if (hasUrgent) return 1; // Cấp độ 1: Khẩn cấp
+    
+    // Kiểm tra quá hạn
+    if (stats.overdue > 0) return 2; // Cấp độ 2: Quá hạn
+    
+    // Kiểm tra có việc đang chờ xử lý
+    if (stats.pending > 0) return 3; // Cấp độ 3: Đang xử lý
+    
+    // Còn lại: hoàn thành hoặc chưa có việc
+    return 4; // Cấp độ 4: Bình thường
+}
+
 // Đếm số lượng công ty theo nhân viên
 function getStaffCompanyStats() {
     const stats = {};
@@ -50,14 +69,13 @@ function renderStaffFilter() {
     }
     
     for (const staffName of sortedStaff) {
-        if (!isAdmin && staffName === currentUserName) continue; // Đã có ở trên
+        if (!isAdmin && staffName === currentUserName) continue;
         const count = staffStats[staffName].total;
         options += `<option value="${staffName}">👤 ${staffName} (${count} công ty)</option>`;
     }
     
     filterSelect.innerHTML = options;
     
-    // Mặc định chọn "Của tôi" cho nhân viên
     if (!isAdmin) {
         filterSelect.value = currentUserName;
     }
@@ -68,11 +86,9 @@ function getCompanyDisplayInfo(companyId) {
     const stats = window.getCompanyStats(companyId);
     const tasks = window.getTasksByCompany(companyId);
     
-    // Tìm công việc khẩn cấp (làm ngay) chưa hoàn thành
     const urgentTasks = tasks.filter(t => t.isUrgent === true && t.status !== 'done');
     const hasUrgent = urgentTasks.length > 0;
     
-    // Tìm công việc sắp đến hạn nhất
     let nearestDueDate = null;
     let nearestTask = null;
     
@@ -86,7 +102,6 @@ function getCompanyDisplayInfo(companyId) {
         }
     }
     
-    // Tính cảnh báo
     let warningText = '';
     let warningClass = '';
     if (hasUrgent) {
@@ -103,7 +118,6 @@ function getCompanyDisplayInfo(companyId) {
         }
     }
     
-    // Tính % hoàn thành cho nhân viên
     let staffProgress = '';
     if (stats.total > 0) {
         const percent = Math.round((stats.done / stats.total) * 100);
@@ -123,7 +137,7 @@ function getCompanyDisplayInfo(companyId) {
     };
 }
 
-// Render danh sách công ty - GIAO DIỆN 2 DÒNG
+// Render danh sách công ty - GIAO DIỆN 2 DÒNG + SẮP XẾP THEO ƯU TIÊN
 window.renderCompanyList = function() {
     if (!window.companiesList) return;
     
@@ -139,6 +153,17 @@ window.renderCompanyList = function() {
         filtered = filtered.filter(c => (c.assignedToName || 'Chưa phân công') === staffFilter);
     }
     
+    // ===== SẮP XẾP THEO MỨC ĐỘ ƯU TIÊN =====
+    filtered.sort((a, b) => {
+        const priorityA = getCompanyPriority(a);
+        const priorityB = getCompanyPriority(b);
+        if (priorityA !== priorityB) {
+            return priorityA - priorityB;
+        }
+        // Nếu cùng mức độ ưu tiên, sắp xếp theo tên
+        return a.name.localeCompare(b.name);
+    });
+    
     const container = document.getElementById('companyList');
     if (!container) return;
     
@@ -153,7 +178,6 @@ window.renderCompanyList = function() {
         const isActive = window.selectedCompanyId === company.id;
         const isMyCompany = !isAdmin && company.assignedToName === currentUserName;
         
-        // Tìm công việc khẩn cấp / cảnh báo
         const urgentTasks = tasks.filter(t => t.isUrgent === true && t.status !== 'done');
         const hasUrgent = urgentTasks.length > 0;
         
@@ -183,11 +207,10 @@ window.renderCompanyList = function() {
             statusColor = '#4caf50';
         }
         
-        // ===== TÍNH % HOÀN THÀNH (BAO GỒM CẢ CÔNG VIỆC ĐỊNH KỲ) =====
-        let totalTasks = stats.total; // Công việc thường
-        let completedTasks = stats.done; // Công việc thường đã hoàn thành
+        // Tính % hoàn thành
+        let totalTasks = stats.total;
+        let completedTasks = stats.done;
         
-        // Cộng thêm công việc định kỳ
         for (const task of tasks) {
             if (task.isRecurring === true) {
                 totalTasks++;
@@ -208,16 +231,15 @@ window.renderCompanyList = function() {
         
         return `
             <div class="company-card-simple ${isActive ? 'active' : ''}" onclick="window.selectCompany('${company.id}')">
-                <!-- Dòng 1: Cảnh báo + Loại hình + Tên -->
                 <div class="company-row">
                     <div class="company-status-badge" style="background: ${statusColor}20; color: ${statusColor};">
                         ${statusIcon} ${statusText}
                     </div>
                     <span class="company-badge ${badgeClass}">${badgeText}</span>
                     <span class="company-name">${escapeHtml(company.name)}</span>
+                    ${isMyCompany ? '<span class="my-badge">Của tôi</span>' : ''}
                 </div>
                 
-                <!-- Dòng 2: Tên quản lý + Thanh tiến trình -->
                 <div class="company-row">
                     <div class="company-staff">
                         <i class="fas fa-user"></i> ${escapeHtml(company.assignedToName) || 'Chưa phân công'}
@@ -267,7 +289,6 @@ window.renderCompaniesView = async function() {
     
     const html = `
         <div class="two-columns">
-            <!-- Sidebar trái: Danh sách công ty -->
             <div class="company-list-panel">
                 <div class="close-sidebar-btn" onclick="window.closeCompanyList()">
                     <i class="fas fa-times"></i> Đóng
@@ -292,7 +313,6 @@ window.renderCompaniesView = async function() {
                 </div>
             </div>
             
-            <!-- Chi tiết công ty bên phải -->
             <div class="company-detail-panel" id="companyDetailPanel">
                 <div class="empty-state">
                     <i class="fas fa-building" style="font-size: 48px;"></i>
@@ -315,7 +335,6 @@ window.renderCompaniesView = async function() {
     
     window.renderCompanyList();
     
-    // Chọn công ty đầu tiên trong danh sách hiển thị
     const staffFilterValue = staffFilter?.value;
     let firstCompany = null;
     
@@ -338,10 +357,8 @@ window.renderCompaniesView = async function() {
 console.log('Company list module loaded!');
 
 // ========== MOBILE FUNCTIONS ==========
-// Biến lưu trạng thái danh sách có đang mở không
 let isCompanyListOpen = false;
 
-// Mở danh sách công ty trên mobile
 window.openCompanyList = function() {
     const sidebar = document.querySelector('.company-list-panel');
     if (sidebar) {
@@ -350,7 +367,6 @@ window.openCompanyList = function() {
     }
 };
 
-// Đóng danh sách công ty trên mobile
 window.closeCompanyList = function() {
     const sidebar = document.querySelector('.company-list-panel');
     if (sidebar) {
@@ -359,7 +375,6 @@ window.closeCompanyList = function() {
     }
 };
 
-// Toggle danh sách công ty
 window.toggleCompanyList = function() {
     if (isCompanyListOpen) {
         window.closeCompanyList();
@@ -368,17 +383,14 @@ window.toggleCompanyList = function() {
     }
 };
 
-// Quay lại danh sách (từ chi tiết công ty) - ĐÃ THÊM HÀM NÀY
 window.backToCompanyList = function() {
     window.openCompanyList();
-    // Cuộn lên đầu trang detail
     const detailPanel = document.querySelector('.company-detail-panel');
     if (detailPanel) {
         detailPanel.scrollTop = 0;
     }
 };
 
-// Ghi đè hàm selectCompany để tự động đóng sidebar trên mobile
 const originalSelectCompany = window.selectCompany;
 window.selectCompany = function(companyId) {
     console.log('selectCompany called:', companyId);
@@ -387,7 +399,6 @@ window.selectCompany = function(companyId) {
     if (window.renderCompanyDetail) {
         window.renderCompanyDetail(companyId);
     }
-    // Trên mobile, tự động đóng sidebar sau khi chọn công ty
     if (window.innerWidth <= 768) {
         window.closeCompanyList();
     }

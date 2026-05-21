@@ -15,7 +15,7 @@ function loadXLSXLibrary() {
     });
 }
 
-// Mở modal import Excel (cho phép tất cả user import)
+// Mở modal import Excel
 window.showImportExcelModal = async function() {
     await loadXLSXLibrary();
     await window.loadUsers();
@@ -25,8 +25,12 @@ window.showImportExcelModal = async function() {
             <div class="import-info" style="margin-bottom: 20px; padding: 12px; background: #e3f2fd; border-radius: 8px;">
                 <i class="fas fa-info-circle"></i> 
                 <strong>Hướng dẫn:</strong> File Excel cần có các cột: 
-                <strong>STT, MST, TÊN, DOANH THU, nhân viên, MÔ HÌNH</strong>
-                <br><span style="color: #ff9800;">⚠️ Dữ liệu thiếu thông tin vẫn được import, có thể cập nhật thủ công sau.</span>
+                <strong>STT, MST, TÊN, DOANH THU, NHÂN VIÊN, MÔ HÌNH</strong>
+                <br>
+                <strong>MÔ HÌNH:</strong> "HKD" → Hộ kinh doanh (2 công việc định kỳ)<br>
+                <strong>MÔ HÌNH:</strong> "CTY" hoặc "CÔNG TY" → Công ty (6 công việc định kỳ)
+                <br>
+                <span style="color: #ff9800;">⚠️ Dữ liệu thiếu thông tin vẫn được import, có thể cập nhật thủ công sau.</span>
             </div>
             
             <div class="form-group">
@@ -50,7 +54,7 @@ window.showImportExcelModal = async function() {
                 <h4>📋 Xem trước dữ liệu (<span id="previewCount">0</span> dòng):</h4>
                 <table class="data-table" style="font-size: 12px;">
                     <thead>
-                        <tr><th>Tên</th><th>MST</th><th>Nhân viên</th><th>Doanh thu</th><th>Cảnh báo</th></tr>
+                        <tr><th>Tên</th><th>MST</th><th>Nhân viên</th><th>Doanh thu</th><th>Loại hình</th><th>Cảnh báo</th></tr>
                     </thead>
                     <tbody id="previewTableBody"></tbody>
                 </table>
@@ -91,7 +95,6 @@ window.showImportExcelModal = async function() {
             const data = await readExcelFile(file);
             importedData = parseExcelData(data, window.usersList);
             
-            // Hiển thị preview
             if (importedData.length > 0) {
                 previewCount.textContent = importedData.length;
                 previewBody.innerHTML = importedData.map(item => {
@@ -107,12 +110,15 @@ window.showImportExcelModal = async function() {
                         warningHtml = '<span style="color: #4caf50;">✅ OK</span>';
                     }
                     
+                    const typeText = item.type === 'company' ? '🏭 Công ty' : '🏪 HKD';
+                    
                     return `
                         <tr>
                             <td>${escapeHtml(item.name) || '-'}</td>
                             <td>${escapeHtml(item.taxCode) || '-'}</td>
                             <td>${escapeHtml(item.assignedToEmail) || 'Chưa phân công'}</td>
                             <td>${escapeHtml(item.revenue) || '-'}</td>
+                            <td>${typeText}</td>
                             <td>${warningHtml}</td>
                         </tr>
                     `;
@@ -121,7 +127,7 @@ window.showImportExcelModal = async function() {
                 confirmBtn.disabled = false;
             } else {
                 previewDiv.style.display = 'block';
-                previewBody.innerHTML = `<tr><td colspan="5" class="empty-state">📭 Không có dữ liệu hợp lệ. Kiểm tra lại file Excel.<li>`;
+                previewBody.innerHTML = `<tr><td colspan="6" class="empty-state">📭 Không có dữ liệu hợp lệ. Kiểm tra lại file Excel.</td></tr>`;
                 confirmBtn.disabled = true;
             }
         } catch (error) {
@@ -139,11 +145,10 @@ window.showImportExcelModal = async function() {
             return;
         }
         
-        if (!confirm(`⚠️ Bạn có chắc muốn import ${importedData.length} HKD/Công ty?\n\nCác dòng thiếu thông tin vẫn được import và có thể cập nhật sau.`)) {
+        if (!confirm(`⚠️ Bạn có chắc muốn import ${importedData.length} công ty/HKD?\n\nCác dòng thiếu thông tin vẫn được import và có thể cập nhật sau.`)) {
             return;
         }
         
-        // Hiển thị thanh tiến trình
         progressDiv.style.display = 'block';
         confirmBtn.disabled = true;
         fileInput.disabled = true;
@@ -152,6 +157,7 @@ window.showImportExcelModal = async function() {
         let errorCount = 0;
         let warningCount = 0;
         let errorList = [];
+        const importedCompanyIds = [];
         
         for (let i = 0; i < importedData.length; i++) {
             const item = importedData[i];
@@ -161,7 +167,6 @@ window.showImportExcelModal = async function() {
             progressDetail.textContent = `Đang xử lý: ${i + 1}/${importedData.length} - ${escapeHtml(item.name) || 'Chưa có tên'}`;
             
             try {
-                // Không chặn import nếu thiếu thông tin, chỉ cảnh báo
                 if (!item.name) {
                     warningCount++;
                     errorList.push(`Dòng ${i + 1}: Thiếu tên - bỏ qua`);
@@ -190,9 +195,15 @@ window.showImportExcelModal = async function() {
                     continue;
                 }
                 
+                // Xác định loại hình dựa trên cột MÔ HÌNH
+                let companyType = 'household';
+                if (item.type === 'company') {
+                    companyType = 'company';
+                }
+                
                 const newCompany = {
                     name: item.name,
-                    type: 'household',
+                    type: companyType,
                     address: '',
                     phone: '',
                     taxCode: item.taxCode || '',
@@ -205,7 +216,9 @@ window.showImportExcelModal = async function() {
                     createdByName: window.currentUserData?.name
                 };
                 
-                await window.firebasePush(window.firebaseRef(window.firebaseDb, 'companies'), newCompany);
+                const newCompanyRef = await window.firebasePush(window.firebaseRef(window.firebaseDb, 'companies'), newCompany);
+                const newCompanyId = newCompanyRef.key;
+                importedCompanyIds.push({ id: newCompanyId, type: companyType, name: item.name });
                 successCount++;
                 
                 await new Promise(r => setTimeout(r, 30));
@@ -219,13 +232,31 @@ window.showImportExcelModal = async function() {
         await window.loadCompanies();
         window.renderCompanyList();
         
+        // ===== TẠO CÔNG VIỆC ĐỊNH KỲ CHO CÁC CÔNG TY VỪA IMPORT =====
+        progressDetail.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> Đang tạo công việc định kỳ...';
+        
+        let recurringCreated = 0;
+        for (const companyInfo of importedCompanyIds) {
+            const company = window.companiesList.find(c => c.id === companyInfo.id);
+            if (company && window.generateTasksForCompany) {
+                const created = await window.generateTasksForCompany(companyInfo.id);
+                recurringCreated += created || 0;
+            }
+            await new Promise(r => setTimeout(r, 50));
+        }
+        
+        await window.loadAllData();
+        
         progressDetail.innerHTML = '<i class="fas fa-check"></i> Hoàn tất! Đang cập nhật giao diện...';
         
         setTimeout(() => {
             progressDiv.style.display = 'none';
             closeModal('entityModal');
             
-            let message = `✅ Import thành công: ${successCount} công ty`;
+            let message = `✅ Import thành công: ${successCount} công ty/HKD`;
+            if (recurringCreated > 0) {
+                message += `\n📋 Đã tạo ${recurringCreated} công việc định kỳ`;
+            }
             if (warningCount > 0) {
                 message += `\n⚠️ Cảnh báo: ${warningCount} dòng (cần cập nhật thủ công)`;
             }
@@ -267,7 +298,6 @@ function readExcelFile(file) {
 function parseExcelData(data, usersList) {
     if (!data || data.length < 2) return [];
     
-    // Tìm dòng header
     let headerRow = null;
     let headerIndex = -1;
     const userEmails = usersList.map(u => u.email);
@@ -285,11 +315,10 @@ function parseExcelData(data, usersList) {
     }
     
     if (!headerRow) {
-        headerRow = ['STT', 'MST', 'TÊN', 'DOANH THU', 'nhân viên', 'MÔ HÌNH'];
+        headerRow = ['STT', 'MST', 'TÊN', 'DOANH THU', 'NHÂN VIÊN', 'MÔ HÌNH'];
         headerIndex = 0;
     }
     
-    // Xác định vị trí các cột
     const colIndex = {
         stt: -1,
         mst: -1,
@@ -303,10 +332,10 @@ function parseExcelData(data, usersList) {
         const cell = String(headerRow[i] || '').toLowerCase();
         if (cell.includes('stt')) colIndex.stt = i;
         else if (cell.includes('mst') || cell.includes('mã số')) colIndex.mst = i;
-        else if (cell.includes('tên') || cell.includes('tên') || cell.includes('hộ')) colIndex.name = i;
+        else if (cell.includes('tên') || cell.includes('thịnh') || cell.includes('hộ')) colIndex.name = i;
         else if (cell.includes('doanh thu')) colIndex.revenue = i;
         else if (cell.includes('nhân viên') || cell.includes('email')) colIndex.staff = i;
-        else if (cell.includes('mô hình')) colIndex.model = i;
+        else if (cell.includes('mô hình') || cell.includes('loại')) colIndex.model = i;
     }
     
     if (colIndex.name === -1) colIndex.name = 2;
@@ -320,16 +349,12 @@ function parseExcelData(data, usersList) {
         if (!row || row.length === 0) continue;
         
         let name = row[colIndex.name] ? String(row[colIndex.name]).trim() : '';
-        
-        // Làm sạch tên
         name = name.replace(/^HỘ KINH DOANH\s*/i, '').replace(/^HKD\s*/i, '').trim();
         
-        // Bỏ qua dòng không có tên hoặc tên quá ngắn
         if (!name || name === '' || name === 'null' || name === 'undefined') continue;
         if (name.toLowerCase().includes('tổng') || name.toLowerCase().includes('sum')) continue;
         if (name.length < 3) continue;
         
-        // Bỏ qua trùng tên trong cùng file
         if (seenNames.has(name)) continue;
         seenNames.add(name);
         
@@ -337,18 +362,25 @@ function parseExcelData(data, usersList) {
         const revenue = colIndex.revenue !== -1 && row[colIndex.revenue] ? String(row[colIndex.revenue]).trim() : '';
         let staffEmail = colIndex.staff !== -1 && row[colIndex.staff] ? String(row[colIndex.staff]).trim().toLowerCase() : '';
         
-        // Xử lý email
+        // XỬ LÝ LOẠI HÌNH TỪ CỘT MÔ HÌNH
+        let companyType = 'household'; // Mặc định HKD
+        const modelValue = colIndex.model !== -1 && row[colIndex.model] ? String(row[colIndex.model]).trim().toUpperCase() : '';
+        
+        if (modelValue.includes('CTY') || modelValue.includes('CÔNG TY') || modelValue.includes('COMPANY')) {
+            companyType = 'company';
+        } else if (modelValue.includes('HKD') || modelValue.includes('HỘ KINH DOANH')) {
+            companyType = 'household';
+        }
+        
         if (staffEmail && !staffEmail.includes('@')) {
             staffEmail = staffEmail + '@khanhninh.com';
         }
         
-        // Kiểm tra user có tồn tại không
         let userFound = false;
         if (staffEmail) {
             userFound = userEmails.includes(staffEmail);
         }
         
-        // Làm sạch MST
         let cleanTaxCode = taxCode;
         if (cleanTaxCode && (cleanTaxCode.length < 5 || cleanTaxCode.includes('khoản') || cleanTaxCode.includes('định'))) {
             cleanTaxCode = '';
@@ -360,6 +392,7 @@ function parseExcelData(data, usersList) {
             revenue: revenue,
             assignedToEmail: staffEmail || null,
             userFound: userFound,
+            type: companyType,
             note: ''
         });
     }
@@ -384,4 +417,4 @@ function closeModal(modalId) {
     if (modal) modal.classList.add('hidden');
 }
 
-console.log('Import Excel module loaded - Allow all users, accept missing data!');
+console.log('Import Excel module loaded - Support HKD and Company!');

@@ -3,36 +3,50 @@ window.currentView = 'dashboard';
 window.selectedCompanyId = null;
 
 window.setupAppEventListeners = function() {
+    // Taskbar navigation
     document.querySelectorAll('.taskbar-btn').forEach(btn => {
-    btn.removeEventListener('click', btn._listener);
-    
-    const handler = () => {
-        const view = btn.dataset.view;
+        btn.removeEventListener('click', btn._listener);
         
-        // TRÊN MOBILE: Nếu click vào tab "companies" và đang ở view companies
-        if (window.innerWidth <= 768 && view === 'companies' && window.currentView === 'companies') {
-            // Toggle danh sách công ty
-            if (window.toggleCompanyList) {
-                window.toggleCompanyList();
+        const handler = () => {
+            const view = btn.dataset.view;
+            
+            // TRÊN MOBILE: Nếu click vào tab "companies" và đang ở view companies
+            if (window.innerWidth <= 768 && view === 'companies' && window.currentView === 'companies') {
+                if (window.toggleCompanyList) {
+                    window.toggleCompanyList();
+                }
+                return;
             }
-            return;
-        }
+            
+            if (view && window.switchView) {
+                window.switchView(view);
+            }
+        };
         
-        if (view && window.switchView) {
-            window.switchView(view);
-        }
-    };
+        btn._listener = handler;
+        btn.addEventListener('click', handler);
+    });
     
-    btn._listener = handler;
-    btn.addEventListener('click', handler);
-});
+    // ========== NOTIFICATION BELL CLICK ==========
+    const notificationBell = document.getElementById('notificationBell');
+    if (notificationBell) {
+        notificationBell.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (window.openNotificationModal) {
+                window.openNotificationModal();
+            } else {
+                console.warn('openNotificationModal not defined');
+                window.showMessage('🔔 Tính năng thông báo đang được phát triển!');
+            }
+        });
+    }
 };
 
 window.switchView = async function(view) {
     window.currentView = view;
     console.log('Switching to view:', view);
     
-    // Cập nhật active button
+    // Update active button
     document.querySelectorAll('.taskbar-btn').forEach(btn => {
         btn.classList.remove('active');
         if (btn.dataset.view === view) {
@@ -40,7 +54,7 @@ window.switchView = async function(view) {
         }
     });
     
-    // Ẩn tất cả views
+    // Hide all views
     const views = ['dashboardView', 'companiesView', 'progressView', 'usersView'];
     views.forEach(v => {
         const el = document.getElementById(v);
@@ -57,8 +71,6 @@ window.switchView = async function(view) {
             if (isAdmin) {
                 if (window.renderDashboard) await window.renderDashboard();
             } else {
-                // Nếu nhân viên cố tình vào dashboard, chuyển sang companies
-               // window.showMessage('🔒 Chỉ Quản lý mới xem được Dashboard!');
                 window.switchView('companies');
             }
             break;
@@ -81,14 +93,12 @@ window.switchView = async function(view) {
     }
 };
 
-// ... phần còn lại giữ nguyên
-
 // Hiển thị danh sách công ty
 window.showCompanyList = function() {
     window.switchView('companies');
 };
 
-// Hiển thị danh sách công việc theo filter (giữ lại cho dashboard admin)
+// Hiển thị danh sách công việc theo filter
 window.showTaskListByFilter = function(filter) {
     let tasks = [];
     let title = '';
@@ -193,36 +203,9 @@ window.showTaskDetail = async function(taskId) {
     await window.viewTaskDetail(taskId);
 };
 
-
-
 // Khởi tạo khi trang load xong
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('DOM loaded, initializing app...');
-    
-    
-    
-    if (window.currentUser) {
-        setTimeout(() => {
-            if (window.setupAppEventListeners) {
-                window.setupAppEventListeners();
-            }
-            if (window.switchView) {
-                window.switchView('dashboard');
-            }
-        }, 200);
-    }
-});
-
-window.addEventListener('click', (e) => {
-    if (e.target.classList && e.target.classList.contains('modal')) {
-        e.target.classList.add('hidden');
-    }
-});
-// Khởi tạo khi trang load xong
-document.addEventListener('DOMContentLoaded', async () => {
-    console.log('DOM loaded, initializing app...');
-    
-   
     
     if (window.currentUser) {
         setTimeout(async () => {
@@ -237,7 +220,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (window.currentUserRole === 'admin' && window.generateRecurringTasks) {
                 await window.generateRecurringTasks();
             }
+            
+            // Khởi tạo thông báo
+            if (window.loadUserNotifications) {
+                await window.loadUserNotifications();
+            }
         }, 500);
     }
 });
+
+// Đóng modal khi click outside
+window.addEventListener('click', (e) => {
+    if (e.target.classList && e.target.classList.contains('modal')) {
+        e.target.classList.add('hidden');
+    }
+});
+
 console.log('App module loaded!');

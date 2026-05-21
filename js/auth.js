@@ -114,18 +114,14 @@ if (loginForm) {
             const usersBtn = document.getElementById('usersMenuBtn');
             
             if (userData.role === 'admin') {
-                // Admin: hiển thị Dashboard và Nhân sự, Ẩn Tiến độ
                 if (dashboardBtn) dashboardBtn.style.display = 'flex';
-                if (progressBtn) progressBtn.style.display = 'none';    // Ẩn tiến độ với admin
+                if (progressBtn) progressBtn.style.display = 'none';
                 if (usersBtn) usersBtn.style.display = 'flex';
-                // Chuyển đến dashboard
                 if (window.switchView) window.switchView('dashboard');
             } else {
-                // Nhân viên: Ẩn Dashboard và Nhân sự, Hiển thị Tiến độ
                 if (dashboardBtn) dashboardBtn.style.display = 'none';
-                if (progressBtn) progressBtn.style.display = 'flex';    // Nhân viên xem được tiến độ
+                if (progressBtn) progressBtn.style.display = 'flex';
                 if (usersBtn) usersBtn.style.display = 'none';
-                // Chuyển đến danh sách công ty
                 if (window.switchView) window.switchView('companies');
             }
             
@@ -133,6 +129,25 @@ if (loginForm) {
             if (window.updateBadges) await window.updateBadges();
             if (window.renderDashboard) await window.renderDashboard();
             if (window.setupAppEventListeners) window.setupAppEventListeners();
+            
+            // ========== KHỞI TẠO REALTIME LISTENERS ==========
+            if (window.initRealtimeListeners) {
+                window.initRealtimeListeners();
+            }
+            
+            // ========== KHỞI TẠO NOTIFICATION ==========
+            if (window.requestNotificationPermission) {
+                window.requestNotificationPermission();
+            }
+            if (window.startNotificationChecker) {
+                window.startNotificationChecker();
+            }
+            if (window.listenForNotifications) {
+                window.listenForNotifications();
+            }
+            if (window.loadUserNotifications) {
+                await window.loadUserNotifications();
+            }
             
             if (window.initProgressRealtime) window.initProgressRealtime();
             if (window.scheduleRecurringTasks) {
@@ -155,7 +170,13 @@ const logoutBtn = document.getElementById('logoutBtn');
 if (logoutBtn) {
     logoutBtn.addEventListener('click', async () => {
         await window.firebaseSignOut();
+        
+        // ========== DỪNG CÁC LISTENER ==========
         if (window.stopProgressRealtime) window.stopProgressRealtime();
+        if (window.stopRealtimeListeners) window.stopRealtimeListeners();
+        if (window.stopNotificationChecker) window.stopNotificationChecker();
+        if (window.stopListeningNotifications) window.stopListeningNotifications();
+        
         window.currentUser = null;
         window.currentUserData = null;
         sessionStorage.removeItem('currentUser');
@@ -243,11 +264,11 @@ window.firebaseOnAuthStateChanged(async (user) => {
             
             if (userData.role === 'admin') {
                 if (dashboardBtn) dashboardBtn.style.display = 'flex';
-                if (progressBtn) progressBtn.style.display = 'none';    // Ẩn tiến độ với admin
+                if (progressBtn) progressBtn.style.display = 'none';
                 if (usersBtn) usersBtn.style.display = 'flex';
             } else {
                 if (dashboardBtn) dashboardBtn.style.display = 'none';
-                if (progressBtn) progressBtn.style.display = 'flex';    // Nhân viên xem được tiến độ
+                if (progressBtn) progressBtn.style.display = 'flex';
                 if (usersBtn) usersBtn.style.display = 'none';
             }
             
@@ -256,14 +277,33 @@ window.firebaseOnAuthStateChanged(async (user) => {
             if (window.renderDashboard) await window.renderDashboard();
             if (window.setupAppEventListeners) window.setupAppEventListeners();
             
+            // ========== KHỞI TẠO REALTIME LISTENERS ==========
+            if (window.initRealtimeListeners) {
+                window.initRealtimeListeners();
+            }
+            
+            // ========== KHỞI TẠO NOTIFICATION ==========
+            if (window.requestNotificationPermission) {
+                window.requestNotificationPermission();
+            }
+            if (window.startNotificationChecker) {
+                window.startNotificationChecker();
+            }
+            if (window.listenForNotifications) {
+                window.listenForNotifications();
+            }
+            if (window.loadUserNotifications) {
+                await window.loadUserNotifications();
+            }
+            
+            if (window.initProgressRealtime) window.initProgressRealtime();
+            if (window.scheduleRecurringTasks) setTimeout(() => window.scheduleRecurringTasks(), 2000);
+            
             if (userData.role === 'admin') {
                 if (window.switchView) window.switchView('dashboard');
             } else {
                 if (window.switchView) window.switchView('companies');
             }
-            
-            if (window.initProgressRealtime) window.initProgressRealtime();
-            if (window.scheduleRecurringTasks) setTimeout(() => window.scheduleRecurringTasks(), 2000);
         }
     }
 });
@@ -271,4 +311,4 @@ window.firebaseOnAuthStateChanged(async (user) => {
 // Tạo tài khoản demo khi khởi động
 setTimeout(() => window.createDemoAccounts(), 1000);
 
-console.log('Auth module with Firebase loaded!');
+console.log('Auth module with Firebase, Realtime & Notification loaded!');
