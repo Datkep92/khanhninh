@@ -1856,3 +1856,380 @@ body {
     height: 100%;
     border-radius: 10px;
 }
+
+/* ========== MOBILE - USERS SECTION ========== */
+@media (max-width: 768px) {
+    /* Users stats */
+    .users-stats {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+        margin-bottom: 12px;
+    }
+    
+    .users-stats-card {
+        padding: 8px;
+    }
+    
+    .users-stats-number {
+        font-size: 22px;
+    }
+    
+    .users-stats-label {
+        font-size: 10px;
+    }
+    
+    /* User cards */
+    .users-list {
+        gap: 8px;
+        max-height: calc(100vh - 200px);
+    }
+    
+    .user-card {
+        padding: 10px;
+    }
+    
+    .user-header {
+        gap: 8px;
+        margin-bottom: 8px;
+    }
+    
+    .user-avatar-large {
+        width: 40px;
+        height: 40px;
+    }
+    
+    .user-avatar-large i {
+        font-size: 28px;
+    }
+    
+    .user-name {
+        font-size: 13px;
+    }
+    
+    .user-role {
+        font-size: 9px;
+        padding: 2px 6px;
+    }
+    
+    .user-email {
+        font-size: 10px;
+    }
+    
+    .user-meta {
+        font-size: 9px;
+    }
+    
+    /* User stats grid - 3 cột trên mobile */
+    .user-stats-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 6px;
+        padding: 6px 0;
+    }
+    
+    .user-stat-number {
+        font-size: 14px;
+    }
+    
+    .user-stat-label {
+        font-size: 8px;
+    }
+    
+    /* User companies */
+    .user-companies {
+        padding: 6px;
+    }
+    
+    .user-companies-title {
+        font-size: 10px;
+    }
+    
+    .company-tag {
+        font-size: 9px;
+        padding: 2px 6px;
+    }
+    
+    /* User progress */
+    .user-progress-label {
+        font-size: 9px;
+    }
+    
+    /* Action buttons */
+    .action-buttons {
+        flex-direction: column;
+        gap: 6px;
+    }
+    
+    .action-buttons .btn {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .action-buttons .search-box {
+        width: 100%;
+        max-width: none;
+        margin-left: 0;
+    }
+}
+
+/* ========== MOBILE - DASHBOARD SECTION ========== */
+@media (max-width: 768px) {
+    /* Stats grid */
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+        margin-bottom: 12px;
+    }
+    
+    .stat-card {
+        padding: 8px 12px;
+    }
+    
+    .stat-number {
+        font-size: 20px;
+    }
+    
+    .stat-card h3 {
+        font-size: 11px;
+    }
+    
+    .stat-icon {
+        font-size: 28px;
+        right: 10px;
+    }
+    
+    .stat-hint {
+        font-size: 9px;
+    }
+    
+    /* Dashboard tabs */
+    .dashboard-tabs {
+        gap: 6px;
+        margin-bottom: 12px;
+    }
+    
+    .dashboard-tab {
+        padding: 6px 12px;
+        font-size: 12px;
+    }
+    
+    .dashboard-tab i {
+        font-size: 12px;
+    }
+    
+    /* Tables */
+    .data-table th,
+    .data-table td {
+        padding: 6px 8px;
+        font-size: 11px;
+    }
+    
+    /* Upcoming tasks */
+    .upcoming-task-item {
+        padding: 8px 10px;
+    }
+    
+    .upcoming-task-title {
+        font-size: 12px;
+        min-width: auto;
+    }
+    
+    .upcoming-task-company {
+        font-size: 10px;
+    }
+    
+    .upcoming-task-date {
+        font-size: 10px;
+    }
+    
+    .upcoming-task-status {
+        font-size: 9px;
+        padding: 2px 8px;
+    }
+    
+    .upcoming-task-warning {
+        font-size: 10px;
+    }
+    
+    /* Company progress cards (dashboard recurring tab) */
+    .company-progress-list {
+        max-height: calc(100vh - 280px);
+    }
+    
+    .company-progress-card {
+        padding: 8px 10px;
+    }
+    
+    .company-progress-header {
+        gap: 4px;
+    }
+    
+    .company-name {
+        font-size: 12px;
+    }
+    
+    .company-badge {
+        font-size: 9px;
+    }
+    
+    .company-progress-status {
+        font-size: 12px;
+    }
+    
+    .company-progress-stats {
+        font-size: 9px;
+    }
+}
+
+/* ========== MOBILE - TASK TABS ========== */
+@media (max-width: 768px) {
+    .task-tabs {
+        gap: 6px;
+        margin-bottom: 10px;
+    }
+    
+    .task-tab {
+        padding: 5px 12px;
+        font-size: 12px;
+    }
+    
+    .task-tab i {
+        font-size: 12px;
+    }
+    
+    .tab-count,
+    .urgent-count {
+        font-size: 9px;
+        padding: 1px 5px;
+    }
+}
+
+/* ========== MOBILE - MODAL ========== */
+@media (max-width: 768px) {
+    .modal-content {
+        width: 95%;
+        max-width: none;
+        margin: 10px;
+    }
+    
+    .modal-header {
+        padding: 10px 12px;
+    }
+    
+    .modal-header h3 {
+        font-size: 14px;
+    }
+    
+    .modal-body {
+        padding: 12px;
+    }
+    
+    /* Form trong modal */
+    .form-group {
+        margin-bottom: 10px;
+    }
+    
+    .form-group label {
+        font-size: 12px;
+    }
+    
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+        padding: 6px 8px;
+        font-size: 12px;
+    }
+    
+    /* Preview table */
+    #importPreview table {
+        font-size: 10px;
+    }
+    
+    #importPreview th,
+    #importPreview td {
+        padding: 4px 6px;
+    }
+}
+
+/* ========== MOBILE - CARD TITLE ========== */
+@media (max-width: 768px) {
+    .card-title {
+        font-size: 13px;
+        margin-bottom: 8px;
+        padding-bottom: 6px;
+        gap: 6px;
+    }
+    
+    .card-title .btn {
+        padding: 4px 10px;
+        font-size: 11px;
+    }
+}
+
+/* ========== FIX SCROLL FOR DASHBOARD & USERS ========== */
+
+/* Đảm bảo content-area có thể cuộn */
+.content-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 20px;
+    height: 100%;
+}
+
+/* Dashboard view - cho phép cuộn toàn bộ */
+#dashboardView {
+    height: 100%;
+    overflow-y: auto;
+    padding-bottom: 30px;
+}
+
+/* Users view - cho phép cuộn toàn bộ */
+#usersView {
+    height: 100%;
+    overflow-y: auto;
+    padding-bottom: 30px;
+}
+
+/* Đảm bảo card không bị giới hạn chiều cao */
+.card {
+    overflow: visible;
+}
+
+/* Bảng trong dashboard có thể cuộn ngang nếu cần */
+.table-container {
+    overflow-x: auto;
+    overflow-y: visible;
+}
+
+/* Danh sách nhân viên có thể cuộn */
+.users-list {
+    overflow-y: visible;
+    max-height: none;
+}
+
+/* Đảm bảo không bị cắt ở cuối trang */
+.view {
+    padding-bottom: 20px;
+}
+
+/* Mobile - đảm bảo cuộn được */
+@media (max-width: 768px) {
+    .content-area {
+        padding: 10px;
+        height: calc(100vh - 110px);
+    }
+    
+    #dashboardView,
+    #usersView {
+        padding-bottom: 40px;
+    }
+    
+    /* Cho phép cuộn trong dashboard tabs */
+    .dashboard-tab-content {
+        overflow-y: visible;
+    }
+    
+    /* Đảm bảo bảng có thể cuộn ngang */
+    .table-container {
+        overflow-x: auto;
+    }
+}
